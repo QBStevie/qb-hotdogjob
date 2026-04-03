@@ -4,6 +4,19 @@ Grand bit of work here, lads! A proper hot dog stand job for QBCore that'll have
 ## What's the Craic?
 Look, you set up your hot dog stand, you get stuck into a bit of cookin' action, and then you're sellin' to the customers that come your way. The catch? Some folks are sound, some are awkward, and what time of day it is makes a massive difference to your profits. It's not just about flippin' a hotdog—you gotta actually be decent at the cookin' minigame to make the good stuff.
 
+## 🎥 Showcase
+
+<p align="center">
+  <a href="https://youtu.be/bi9Z18guCgg">
+    <img src="https://img.youtube.com/vi/bi9Z18guCgg/maxresdefault.jpg" width="700" alt="qb-hotdogjob showcase"/>
+  </a>
+</p>
+
+<p align="center">
+  ▶ Click to watch the full demo
+</p>
+
+
 ## The Features, Yeah
 
 ### Your Stand
