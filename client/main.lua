@@ -81,16 +81,6 @@ function StripColorCodes(text)
     return cleaned
 end
 
-local function ShowText(text, coords)
-    if Config.TextDisplayType == 'qb-core' then
-        exports['qb-core']:DrawText(StripColorCodes(text), 'left')
-    elseif Config.TextDisplayType == 'html' then
-        SendNUIMessage({ action = '--ShowTextPrompt', text = text })
-    elseif Config.TextDisplayType == '3d' then
-        CurrentTextPrompt, CurrentTextCoords = text, coords
-    end
-end
-
 local function HideText()
     if Config.TextDisplayType == 'qb-core' then
         exports['qb-core']:HideText()
@@ -118,14 +108,6 @@ local function CleanupSellingTarget()
 end
 
 -- Text Display Functions
-local function ShowTextPrompt(text, coords, force)
-    if not Config.ShowTextPrompts then return end
-    local textStr = tostring(text)
-    if not force and TextState == textStr and IsTextVisible then return end
-    TextState, IsTextVisible = textStr, true
-    ShowText(textStr, coords)
-end
-
 local function HideTextPrompt()
     if not IsTextVisible then return end
     IsTextVisible, TextState = false, nil
@@ -145,16 +127,15 @@ end
 
 local function CreateStandZones()
     if not StandObject or not DoesEntityExist(StandObject) then return end
-    
+
     CleanupStandZones() -- Clean up any existing zones first
-    
-    local standCoords = GetEntityCoords(StandObject)
+
     local standHeading = GetEntityHeading(StandObject)
-    
+
     -- Create Grab Zone (at the back/side of stand)
     local grabOffset = ZoneConfig.GrabZone.offset
     local grabPos = GetOffsetFromEntityInWorldCoords(StandObject, grabOffset.x, grabOffset.y, grabOffset.z)
-    StandZones.GrabZone = BoxZone:Create(vector3(grabPos.x, grabPos.y, grabPos.z), 
+    StandZones.GrabZone = BoxZone:Create(vector3(grabPos.x, grabPos.y, grabPos.z),
         ZoneConfig.GrabZone.size, ZoneConfig.GrabZone.size, {
             name = 'hotdog_grab_zone',
             debugPoly = false,
@@ -162,11 +143,11 @@ local function CreateStandZones()
             maxZ = grabPos.z + 2.0,
             heading = standHeading,
         })
-    
+
     -- Create Prepare Zone (in front of stand)
     local prepOffset = ZoneConfig.PrepareZone.offset
     local prepPos = GetOffsetFromEntityInWorldCoords(StandObject, prepOffset.x, prepOffset.y, prepOffset.z)
-    StandZones.PrepareZone = BoxZone:Create(vector3(prepPos.x, prepPos.y, prepPos.z), 
+    StandZones.PrepareZone = BoxZone:Create(vector3(prepPos.x, prepPos.y, prepPos.z),
         ZoneConfig.PrepareZone.size, ZoneConfig.PrepareZone.size, {
             name = 'hotdog_prepare_zone',
             debugPoly = false,
@@ -174,42 +155,32 @@ local function CreateStandZones()
             maxZ = prepPos.z + 2.0,
             heading = standHeading,
         })
-    
+
     -- Create Selling Zone (around the stand for customer detection)
     local sellOffset = ZoneConfig.SellingZone.offset
     local sellPos = GetOffsetFromEntityInWorldCoords(StandObject, sellOffset.x, sellOffset.y, sellOffset.z)
-    StandZones.SellingZone = CircleZone:Create(vector3(sellPos.x, sellPos.y, sellPos.z), 
+    StandZones.SellingZone = CircleZone:Create(vector3(sellPos.x, sellPos.y, sellPos.z),
         ZoneConfig.SellingZone.size, {
             name = 'hotdog_selling_zone',
             debugPoly = false,
             useZ = true,
         })
-    
+
     -- Grab Zone Callbacks
     StandZones.GrabZone:onPlayerInOut(function(isPointInside)
         InStandZones.Grab = isPointInside
-        if isPointInside then
-            -- Only show grab text if not in prepare zone (prepare zone takes priority)
-            if not InStandZones.Prepare then
-                local grabText = IsPushing and Lang:t('info.drop_stall') or Lang:t('info.grab_stall')
-                local grabPos = GetOffsetFromEntityInWorldCoords(StandObject, 1.0, 0.0, 1.0)
-                --ShowTextPrompt(grabText, grabPos, true)
-            end
-        else
+        if not isPointInside then
             -- Always try to hide when leaving grab zone (dedicated thread will prevent if still in prepare zone)
             HideTextPrompt()
         end
     end)
-    
+
     -- Prepare Zone Callbacks
     StandZones.PrepareZone:onPlayerInOut(function(isPointInside)
         InStandZones.Prepare = isPointInside
         if isPointInside then
             -- Show text immediately when entering zone
             local currentSellingState = SellingData.Enabled
-            local prepText = currentSellingState and Lang:t('info.selling_prep') or Lang:t('info.not_selling')
-            local prepPos = GetOffsetFromEntityInWorldCoords(StandObject, 0.0, 0.0, 1.0)
-            --ShowTextPrompt(prepText, prepPos, true) -- Force show on zone entry
             LastSellingState = currentSellingState
         else
             -- Always try to hide when leaving prepare zone (dedicated thread will prevent if still in grab zone)
@@ -270,7 +241,7 @@ end
 local function UpdateLevel()
     local MyRep = (PlayerData.metadata and PlayerData.metadata['rep'] and PlayerData.metadata['rep']['hotdog']) or 0
     local thresholds = Config.ReputationThresholds or { [1] = 0, [2] = 50, [3] = 100, [4] = 200 }
-    
+
     -- Calculate level based on reputation thresholds (more maintainable)
     if MyRep >= thresholds[4] then
         Config.MyLevel = 4
@@ -281,7 +252,7 @@ local function UpdateLevel()
     else
         Config.MyLevel = 1
     end
-    
+
     return { lvl = Config.MyLevel, rep = MyRep }
 end
 
@@ -290,13 +261,13 @@ local function DrawText3D(coords, text)
     local coordsX, coordsY, coordsZ = coords.x or 0, coords.y or 0, coords.z or 0
     local onScreen, _x, _y = World3dToScreen2d(coordsX, coordsY, coordsZ)
     if not onScreen then return end
-    
+
     -- Strip GTA color codes from text (e.g., ~g~, ~r~, ~b~, ~s~, etc.)
     local cleanText = text:gsub("~%a~", "")
-    
+
     local distance = #(GetGameplayCamCoord() - vector3(coordsX, coordsY, coordsZ))
     local scale = ((1 / distance) * 2) * ((1 / GetGameplayCamFov()) * 100)
-    
+
     SetTextScale(0.0 * scale, 0.35 * scale)
     SetTextFont(4)
     SetTextProportional(1)
@@ -350,8 +321,8 @@ local function GetAvailableHotdog()
     if not Config.Stock then return nil end
     local available = {}
     for k, v in pairs(Config.Stock) do
-        if v and v.Current and v.Current > 0 then 
-            available[#available + 1] = k 
+        if v and v.Current and v.Current > 0 then
+            available[#available + 1] = k
         end
     end
     return #available > 0 and available[math.random(1, #available)] or nil
@@ -385,7 +356,7 @@ local function GetDemandMultiplier()
     for _, period in ipairs(demandTable) do
         local startHour = tonumber(period.StartHour) or 0
         local endHour = tonumber(period.EndHour) or 24
-        local inRange = false
+        local inRange
 
         if startHour <= endHour then
             inRange = hour >= startHour and hour < endHour
@@ -466,10 +437,10 @@ local function UpdateUI()
                     ShowPrepare = canPrepare,
                     ShowSell = CurrentSellPrompt ~= nil,
                 }
-                SendNUIMessage({ 
-                    action = 'UpdateUI', 
-                    IsActive = IsUIActive, 
-                    Stock = Config.Stock, 
+                SendNUIMessage({
+                    action = 'UpdateUI',
+                    IsActive = IsUIActive,
+                    Stock = Config.Stock,
                     Level = UpdateLevel(),
                     Controls = controls,
                     Settings = {
@@ -587,19 +558,19 @@ local function PrepareAnim()
     TaskPlayAnim(ped, 'amb@prop_human_bbq@male@idle_a', 'idle_b', 6.0, -6.0, -1, 47, 0, 0, 0, 0)
     SpatelObject = CreateObject(`prop_fish_slice_01`, 0, 0, 0, true, true, true)
     local spatelOffset = AttachmentOffsets.Spatel
-    AttachEntityToEntity(SpatelObject, ped, GetPedBoneIndex(ped, BoneIndices.Hand), 
-        spatelOffset.x, spatelOffset.y, spatelOffset.z, 
-        spatelOffset.rotX, spatelOffset.rotY, spatelOffset.rotZ, 
+    AttachEntityToEntity(SpatelObject, ped, GetPedBoneIndex(ped, BoneIndices.Hand),
+        spatelOffset.x, spatelOffset.y, spatelOffset.z,
+        spatelOffset.rotX, spatelOffset.rotY, spatelOffset.rotZ,
         true, true, false, true, 1, true)
     PreparingFood = true
-    
+
     CreateThread(function()
         while PreparingFood do
             Wait(0) -- linter friendly wait
-            local ped = PlayerPedId()
-            if not IsEntityPlayingAnim(ped, 'amb@prop_human_bbq@male@idle_a', 'idle_b', 3) then
+            local localPed = PlayerPedId()
+            if not IsEntityPlayingAnim(localPed, 'amb@prop_human_bbq@male@idle_a', 'idle_b', 3) then
                 LoadAnim('amb@prop_human_bbq@male@idle_a')
-                TaskPlayAnim(ped, 'amb@prop_human_bbq@male@idle_a', 'idle_b', 6.0, -6.0, -1, 49, 0, 0, 0, 0)
+                TaskPlayAnim(localPed, 'amb@prop_human_bbq@male@idle_a', 'idle_b', 6.0, -6.0, -1, 49, 0, 0, 0, 0)
             end
             Wait(200)
         end
@@ -615,32 +586,32 @@ local function TakeHotdogStand()
     if not StandObject or not DoesEntityExist(StandObject) then return end
     local PlayerPed = PlayerPedId()
     IsPushing = true
-    
+
     -- Clean up zones when picking up stand (zones are static and won't work when stand moves)
     CleanupStandZones()
-    
+
     NetworkRequestControlOfEntity(StandObject)
     LoadAnim(AnimationData.lib)
     TaskPlayAnim(PlayerPed, AnimationData.lib, AnimationData.anim, 8.0, 8.0, -1, 50, 0, false, false, false)
     SetTimeout(150, function()
         if StandObject and DoesEntityExist(StandObject) then
             local standOffset = AttachmentOffsets.Stand
-            AttachEntityToEntity(StandObject, PlayerPed, GetPedBoneIndex(PlayerPed, BoneIndices.Stand), 
-                standOffset.x, standOffset.y, standOffset.z, 
-                standOffset.rotX, standOffset.rotY, standOffset.rotZ, 
+            AttachEntityToEntity(StandObject, PlayerPed, GetPedBoneIndex(PlayerPed, BoneIndices.Stand),
+                standOffset.x, standOffset.y, standOffset.z,
+                standOffset.rotX, standOffset.rotY, standOffset.rotZ,
                 false, false, false, false, 1, true)
         end
     end)
     FreezeEntityPosition(StandObject, false)
     FreezeEntityPosition(PlayerPed, false)
-    
+
     CreateThread(function()
         while IsPushing do
             Wait(0) -- linter friendly wait
-            local PlayerPed = PlayerPedId()
-            if not IsEntityPlayingAnim(PlayerPed, AnimationData.lib, AnimationData.anim, 3) then
+            local localPed = PlayerPedId()
+            if not IsEntityPlayingAnim(localPed, AnimationData.lib, AnimationData.anim, 3) then
                 LoadAnim(AnimationData.lib)
-                TaskPlayAnim(PlayerPed, AnimationData.lib, AnimationData.anim, 8.0, 8.0, -1, 50, 0, false, false, false)
+                TaskPlayAnim(localPed, AnimationData.lib, AnimationData.anim, 8.0, 8.0, -1, 50, 0, false, false, false)
             end
             Wait(1000)
         end
@@ -660,14 +631,14 @@ local function FinishMinigame(faults)
         PreparingFood = false
         return
     end
-    
+
     local stockData = Config.Stock[Quality]
     local MaxStock = stockData.Max[Config.MyLevel]
     if not MaxStock or MaxStock <= 0 then
         PreparingFood = false
         return
     end
-    
+
     if (stockData.Current or 0) + 1 <= MaxStock then
         TriggerServerEvent('qb-hotdogjob:server:UpdateReputation', Quality)
         local currentStock = stockData.Current or 0
@@ -865,7 +836,7 @@ local function StartHotdogMinigame()
     PrepareAnim()
 
     local provider = (Config.Minigame and Config.Minigame.Provider) or 'auto'
-    local result = nil
+    local result
 
     if provider == 'builtin' then
         result = RunBuiltInMinigame()
@@ -915,12 +886,12 @@ end
 local function StandInteractionLoop()
     -- Create zones when stand is spawned
     CreateStandZones()
-    
+
     -- Input handling thread for zone-based interactions
     CreateThread(function()
         while IsWorking and StandObject do
             Wait(0)
-            
+
             -- Handle dropping stand when pushing (works anywhere, not just in zones)
             if IsPushing then
                 if IsControlJustPressed(0, 47) or IsDisabledControlJustPressed(0, 47) then -- G key
@@ -935,27 +906,22 @@ local function StandInteractionLoop()
                     TakeHotdogStand()
                 end
             end
-            
+
             -- Handle Prepare Zone interactions (only when not pushing)
             -- Check prepare zone independently - prepare takes priority over grab
             if not IsPushing and StandObject and DoesEntityExist(StandObject) then
-                local PlayerPed = PlayerPedId()
-                local PlayerPos = GetEntityCoords(PlayerPed)
-                local PrepOffset = GetOffsetFromEntityInWorldCoords(StandObject, 0.0, 0.0, 1.0)
-                local PrepDist = #(PlayerPos - PrepOffset)
-                
+
                 -- Check if in prepare zone (only use PolyZone, not distance fallback to avoid conflicts)
                 if InStandZones.Prepare then
                     -- Always show text when in prepare area
                     local currentSellingState = SellingData.Enabled
                     local prepText = currentSellingState and Lang:t('info.selling_prep') or Lang:t('info.not_selling')
-                    
+
                     -- Always show text when in prepare zone - update if state changed or not visible
                     if LastSellingState ~= currentSellingState or not IsTextVisible or TextState ~= tostring(prepText) then
-                        --ShowTextPrompt(prepText, PrepOffset, true) -- Force show
                         LastSellingState = currentSellingState
                     end
-                    
+
                     -- Handle prepare interaction (E key)
                     if IsControlJustPressed(0, 38) or IsDisabledControlJustPressed(0, 38) then
                         HideTextPrompt()
@@ -970,7 +936,7 @@ local function StandInteractionLoop()
                     end
                 end
             end
-            
+
             Wait(THREAD_UPDATE_INTERVAL)
         end
     end)
@@ -982,13 +948,13 @@ local function StartWorking()
         QBCore.Functions.Notify('You do not have the required job to use this!', 'error')
         return
     end
-    
+
     QBCore.Functions.TriggerCallback('qb-hotdogjob:server:HasMoney', function(HasMoney)
         if not HasMoney then
             QBCore.Functions.Notify(Lang:t('error.no_money'), 'error')
             return
         end
-        
+
         local SpawnCoords = Config.Locations['spawn'].coords
         IsWorking = true
         LoadModel('prop_hotdogstand_01')
@@ -997,10 +963,10 @@ local function StartWorking()
         SetEntityHeading(StandObject, SpawnCoords.w - 90)
         FreezeEntityPosition(StandObject, true)
         StartActiveLoops()
-        
+
         -- Create zones for stand interactions
         CreateStandZones()
-        
+
         if Config.UseTarget then
             exports['qb-target']:AddTargetEntity(StandObject, {
                 options = {
@@ -1038,7 +1004,7 @@ local function StartWorking()
         else
             StandInteractionLoop()
         end
-        
+
         UpdateUI()
         QBCore.Functions.Notify(Lang:t('success.deposit', { deposit = Config.StandDeposit }), 'success')
     end)
@@ -1050,7 +1016,7 @@ local function StopWorking()
     if SellingData.Enabled then CleanupSellingTarget() end
     IsUIActive = false
     SendNUIMessage({ action = 'UpdateUI', IsActive = false })
-    
+
     if StandObject and DoesEntityExist(StandObject) then
         QBCore.Functions.TriggerCallback('qb-hotdogjob:server:BringBack', function(DidBail)
             if DidBail then
@@ -1065,16 +1031,16 @@ local function StopWorking()
     else
         QBCore.Functions.Notify(Lang:t('error.no_stand_found'), 'error')
     end
-    
+
     -- Reset states
     IsWorking = false
     IsPushing = false
     ActiveLoopsStarted = false
     CurrentSellPrompt = nil
-    
+
     -- Reset stock
-    for _, v in pairs(Config.Stock) do 
-        if v then v.Current = 0 end 
+    for _, v in pairs(Config.Stock) do
+        if v then v.Current = 0 end
     end
 end
 
@@ -1137,17 +1103,17 @@ local function SellToPed(ped)
     if not StandObject or not DoesEntityExist(StandObject) then return end
     if not ped or not DoesEntityExist(ped) then return end
     CurrentSellPrompt = nil
-    
+
     -- Skip if ped was recently interacted with
     if SellingData.RecentPeds and SellingData.RecentPeds[ped] then
         SellingData.HasTarget = false
         return
     end
-    
+
     SellingData.HasTarget = true
     SetEntityAsNoLongerNeeded(ped)
     ClearPedTasks(ped)
-    
+
     SellingData.Hotdog = GetAvailableHotdog()
     if not SellingData.Hotdog then
         SellingData.HasTarget = false
@@ -1172,14 +1138,14 @@ local function SellToPed(ped)
     local demandMultiplier, demandLabel = GetDemandMultiplier()
     SellingData.DemandMultiplier = demandMultiplier
     SellingData.DemandLabel = demandLabel
-    
+
     local HotdogsForSale, SellingPrice = CalculateSaleAmount(SellingData.Hotdog)
     local coords = GetOffsetFromEntityInWorldCoords(StandObject, OffsetData.x, OffsetData.y, OffsetData.z)
     local pedCoords = GetEntityCoords(ped)
     local pedDist = #(coords - pedCoords)
-    
+
     TaskGoStraightToCoord(ped, coords, 1.2, -1, 0.0, 0.0)
-    
+
     -- Wait for ped to arrive
     while pedDist > OffsetData.Distance do
         Wait(0) -- linter friendly wait
@@ -1189,14 +1155,14 @@ local function SellToPed(ped)
         pedCoords = GetEntityCoords(ped)
         TaskGoStraightToCoord(ped, coords, 1.2, -1, 0.0, 0.0)
         pedDist = #(coords - pedCoords)
-        
+
         if PlayerDist > 10.0 then
             ClearSellingTarget(ped, 'error.too_far', 'error')
             return
         end
         Wait(100)
     end
-    
+
     -- Position ped
     FreezeEntityPosition(ped, true)
     TaskLookAtEntity(ped, PlayerPedId(), 5500.0, 2048, 3)
@@ -1210,7 +1176,7 @@ local function SellToPed(ped)
         ClearSellingTarget(ped, 'error.cust_refused', 'error')
         return
     end
-    
+
     -- Selling loop
     while pedDist < OffsetData.Distance and SellingData.HasTarget do
         Wait(0) -- linter friendly wait
@@ -1219,7 +1185,7 @@ local function SellToPed(ped)
         local PlayerDist = #(playerCoords - coords)
         pedCoords = GetEntityCoords(ped)
         pedDist = #(coords - pedCoords)
-        
+
         if PlayerDist < 4 and HotdogsForSale > 0 and SellingPrice > 0 then
             if Config.UseTarget then
                 if not zoneMade then
@@ -1274,10 +1240,9 @@ local function SellToPed(ped)
                 local sellTextStr = tostring(sellText)
                 CurrentSellPrompt = sellTextStr
                 if TextState ~= sellTextStr or not IsTextVisible then
-                    if Config.TextDisplayType == 'qb-core' or Config.TextDisplayType == 'html' then --ShowTextPrompt(sellText, pedCoords)
-                    elseif Config.TextDisplayType == '3d' then DrawText3D(pedCoords, sellText) end
+                    if Config.TextDisplayType == '3d' then DrawText3D(pedCoords, sellText) end
                 end
-                
+
                 if IsControlJustPressed(0, 161) or IsDisabledControlJustPressed(0, 161) then
                     HideTextPrompt()
                     CurrentSellPrompt = nil
@@ -1289,9 +1254,9 @@ local function SellToPed(ped)
                     TaskPlayAnim(Myped, 'mp_common', 'givetake1_b', 8.0, 8.0, 1100, 48, 0.0, 0, 0, 0)
                     HotdogObject = CreateObject(`prop_cs_hotdog_01`, 0, 0, 0, true, true, true)
                     local hotdogOffset = AttachmentOffsets.Hotdog
-                    AttachEntityToEntity(HotdogObject, Myped, GetPedBoneIndex(Myped, BoneIndices.Hand), 
-                        hotdogOffset.x, hotdogOffset.y, hotdogOffset.z, 
-                        hotdogOffset.rotX, hotdogOffset.rotY, hotdogOffset.rotZ, 
+                    AttachEntityToEntity(HotdogObject, Myped, GetPedBoneIndex(Myped, BoneIndices.Hand),
+                        hotdogOffset.x, hotdogOffset.y, hotdogOffset.z,
+                        hotdogOffset.rotX, hotdogOffset.rotY, hotdogOffset.rotZ,
                         true, true, false, true, 1, true)
                     SetTimeout(1250, function()
                         if HotdogObject then
@@ -1309,7 +1274,7 @@ local function SellToPed(ped)
                     SellingData.Hotdog = nil
                     break
                 end
-                
+
                 if IsControlJustPressed(0, 162) or IsDisabledControlJustPressed(0, 162) then
                     HideTextPrompt()
                     CurrentSellPrompt = nil
@@ -1356,27 +1321,27 @@ local function ToggleSell()
         QBCore.Functions.Notify(Lang:t('error.no_stand'), 'error')
         return
     end
-    
+
     local pos, objpos = GetEntityCoords(PlayerPedId()), GetEntityCoords(StandObject)
     if #(pos - objpos) > 5.0 then
         QBCore.Functions.Notify(Lang:t('error.too_far'), 'error')
         return
     end
-    
+
     if not SellingData.Enabled then
         SellingData.Enabled = true
-        
+
         -- Use PolyZone selling zone if available, otherwise fallback to manual checking
         if StandZones.SellingZone then
             StandZones.SellingZone:onPlayerInOut(function(isPointInside)
                 InStandZones.Selling = isPointInside
             end)
         end
-        
+
         CreateThread(function()
             while SellingData.Enabled and StandObject and DoesEntityExist(StandObject) do
                 Wait(THREAD_SLOW_UPDATE_INTERVAL) -- Reduced from 0ms to improve performance
-                
+
                 -- Check if we have any hotdogs available before trying to sell
                 local hasHotdogs = GetAvailableHotdog() ~= nil
                 if not hasHotdogs then
@@ -1389,7 +1354,7 @@ local function ToggleSell()
                     end
                     break
                 end
-                
+
                 if not SellingData.HasTarget then
                     local coords = GetOffsetFromEntityInWorldCoords(StandObject, OffsetData.x, OffsetData.y, OffsetData.z)
                     local PlayerPeds = {}
@@ -1397,10 +1362,10 @@ local function ToggleSell()
                         PlayerPeds[#PlayerPeds + 1] = GetPlayerPed(player)
                     end
                     local closestPed, closestDistance = QBCore.Functions.GetClosestPed(coords, PlayerPeds)
-                    
+
                     -- Check if ped is in selling zone (if using PolyZone) or within distance
                     local inSellingArea = StandZones.SellingZone and InStandZones.Selling or (closestDistance < ZoneConfig.SellingZone.size)
-                    
+
                     if inSellingArea and closestPed ~= 0 and not IsPedInAnyVehicle(closestPed, false) then
                         SellToPed(closestPed)
                     end
@@ -1441,7 +1406,7 @@ end)
 RegisterNetEvent('qb-hotdogjob:client:ToggleSell', ToggleSell)
 
 RegisterNetEvent('qb-hotdogjob:staff:DeletStand', function()
-    local ped, pos = PlayerPedId(), GetEntityCoords(PlayerPedId())
+    local pos = GetEntityCoords(PlayerPedId())
     local Object = GetClosestObjectOfType(pos.x, pos.y, pos.z, 10.0, `prop_hotdogstand_01`, true, false, false)
     if Object and #(pos - GetEntityCoords(Object)) <= 5 then
         NetworkRegisterEntityAsNetworked(Object)
@@ -1492,14 +1457,13 @@ CreateThread(function()
             minZ = Config.Locations['take'].coords.z - 1,
             maxZ = Config.Locations['take'].coords.z + 1,
         })
-        
+
         hotdogStart:onPlayerInOut(function(isPointInside)
             if isPointInside then
                 inZone = true
                 PlayerData = QBCore.Functions.GetPlayerData()
                 if HasRequiredJob() then
                     local text = IsWorking and Lang:t('info.stop_working') or Lang:t('info.start_working')
-                    --ShowText(text, nil)
                     exports['qb-core']:DrawText(StripColorCodes(text), 'left')
                     CreateThread(function()
                         while inZone do
@@ -1512,7 +1476,6 @@ CreateThread(function()
                 end
             else
                 inZone = false
-                --HideText()
                 exports['qb-core']:HideText()
             end
         end)
