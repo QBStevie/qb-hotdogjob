@@ -81,16 +81,6 @@ function StripColorCodes(text)
     return cleaned
 end
 
-local function ShowText(text, coords)
-    if Config.TextDisplayType == 'qb-core' then
-        exports['qb-core']:DrawText(StripColorCodes(text), 'left')
-    elseif Config.TextDisplayType == 'html' then
-        SendNUIMessage({ action = '--ShowTextPrompt', text = text })
-    elseif Config.TextDisplayType == '3d' then
-        CurrentTextPrompt, CurrentTextCoords = text, coords
-    end
-end
-
 local function HideText()
     if Config.TextDisplayType == 'qb-core' then
         exports['qb-core']:HideText()
@@ -1474,7 +1464,6 @@ CreateThread(function()
                 PlayerData = QBCore.Functions.GetPlayerData()
                 if HasRequiredJob() then
                     local text = IsWorking and Lang:t('info.stop_working') or Lang:t('info.start_working')
-                    --ShowText(text, nil)
                     exports['qb-core']:DrawText(StripColorCodes(text), 'left')
                     CreateThread(function()
                         while inZone do
@@ -1487,7 +1476,6 @@ CreateThread(function()
                 end
             else
                 inZone = false
-                --HideText()
                 exports['qb-core']:HideText()
             end
         end)
