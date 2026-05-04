@@ -179,12 +179,7 @@ local function CreateStandZones()
     -- Grab Zone Callbacks
     StandZones.GrabZone:onPlayerInOut(function(isPointInside)
         InStandZones.Grab = isPointInside
-        if isPointInside then
-            -- Only show grab text if not in prepare zone (prepare zone takes priority)
-            if not InStandZones.Prepare then
-                --ShowTextPrompt(IsPushing and Lang:t('info.drop_stall') or Lang:t('info.grab_stall'), GetOffsetFromEntityInWorldCoords(StandObject, 1.0, 0.0, 1.0), true)
-            end
-        else
+        if not isPointInside then
             -- Always try to hide when leaving grab zone (dedicated thread will prevent if still in prepare zone)
             HideTextPrompt()
         end
@@ -196,7 +191,6 @@ local function CreateStandZones()
         if isPointInside then
             -- Show text immediately when entering zone
             local currentSellingState = SellingData.Enabled
-            --ShowTextPrompt(currentSellingState and Lang:t('info.selling_prep') or Lang:t('info.not_selling'), GetOffsetFromEntityInWorldCoords(StandObject, 0.0, 0.0, 1.0), true)
             LastSellingState = currentSellingState
         else
             -- Always try to hide when leaving prepare zone (dedicated thread will prevent if still in grab zone)
@@ -935,7 +929,6 @@ local function StandInteractionLoop()
 
                     -- Always show text when in prepare zone - update if state changed or not visible
                     if LastSellingState ~= currentSellingState or not IsTextVisible or TextState ~= tostring(prepText) then
-                        --ShowTextPrompt(prepText, nil, true) -- Force show
                         LastSellingState = currentSellingState
                     end
 
